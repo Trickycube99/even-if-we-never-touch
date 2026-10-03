@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -19,8 +19,8 @@ const CinematicStorySection = () => {
   const currentFrameRef = useRef(0);
 
   const autoPlayFrameRef = useRef(0);
+  const autoPlayIntervalRef = useRef(null);
   const isMobileRef = useRef(false);
-  const mobilePlayingRef = useRef(false);
 
   // Preload Dataset 2 (144 Quad HD upscaled frames)
   useEffect(() => {
@@ -48,7 +48,63 @@ const CinematicStorySection = () => {
     }
   }, []);
 
-  // GSAP ScrollTrigger on PC, IntersectionObserver / scroll trigger on Mobile
+  // Helper to start automatic animation playback on Mobile (direction: 'forward' | 'backward')
+  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 2) => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current);
+      autoPlayIntervalRef.current = null;
+    }
+
+    setScrollProgress(0.5); // Activate text overlay
+    const frameStep = 1.0 * speedMultiplier;
+
+    if (direction === 'forward') {
+      if (autoPlayFrameRef.current >= TOTAL_FRAMES - 1) {
+        autoPlayFrameRef.current = 0;
+      }
+      autoPlayIntervalRef.current = setInterval(() => {
+        if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+          autoPlayFrameRef.current += frameStep;
+        } else {
+          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+          if (autoPlayIntervalRef.current) {
+            clearInterval(autoPlayIntervalRef.current);
+            autoPlayIntervalRef.current = null;
+          }
+        }
+      }, 32);
+    } else {
+      // Reverse playback at 2X speed on scroll back
+      if (autoPlayFrameRef.current <= 0) {
+        autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+      }
+      autoPlayIntervalRef.current = setInterval(() => {
+        if (autoPlayFrameRef.current > 0) {
+          autoPlayFrameRef.current -= frameStep;
+        } else {
+          autoPlayFrameRef.current = 0;
+          if (autoPlayIntervalRef.current) {
+            clearInterval(autoPlayIntervalRef.current);
+            autoPlayIntervalRef.current = null;
+          }
+        }
+      }, 32);
+    }
+  }, []);
+
+  // Reset to initial frame 0 when top of page is reached
+  const resetToStart = useCallback(() => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current);
+      autoPlayIntervalRef.current = null;
+    }
+    autoPlayFrameRef.current = 0;
+    currentFrameRef.current = 0;
+    targetFrameRef.current = 0;
+    setScrollProgress(0);
+  }, []);
+
+  // GSAP ScrollTrigger on PC, IntersectionObserver with direction tracking on Mobile
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
@@ -56,7 +112,7 @@ const CinematicStorySection = () => {
     isMobileRef.current = isMobile;
 
     if (!isMobile) {
-      // PC & Laptop: Exact 4800px pinned scroll scrubbing
+      // PC & Laptop: Exact 4800px pinned scroll scrubbing untouched
       const ctx = gsap.context(() => {
         gsap.fromTo(
           titleRef.current,
@@ -91,35 +147,46 @@ const CinematicStorySection = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: Trigger independent animation playback when scene comes into view
-      let intervalId;
+      // Mobile: 2X speed animation playback after 0.5s in viewport, reverse on scroll up, reset at top
+      let viewportTimer = null;
+      let lastScrollY = window.scrollY;
+
+      const handleScrollTopCheck = () => {
+        if (window.scrollY < 50) {
+          resetToStart();
+        }
+      };
+      window.addEventListener('scroll', handleScrollTopCheck, { passive: true });
 
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
             if (entry.isIntersecting) {
-              setScrollProgress(0.5); // Activate text overlay
-              mobilePlayingRef.current = true;
+              const currentY = window.scrollY;
+              const isScrollingUp = currentY < lastScrollY;
+              lastScrollY = currentY;
 
-              if (!intervalId) {
-                intervalId = setInterval(() => {
-                  if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
-                    autoPlayFrameRef.current += 0.8;
-                  } else {
-                    autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-                  }
-                }, 32);
-              }
+              if (viewportTimer) clearTimeout(viewportTimer);
+              viewportTimer = setTimeout(() => {
+                if (isScrollingUp) {
+                  startAutoPlay('backward', 2); // 2X speed reverse playback on scroll up
+                } else {
+                  startAutoPlay('forward', 2); // 2X speed forward playback after 0.5s
+                }
+              }, 500); // 0.5s viewport delay
             } else {
-              if (intervalId) {
-                clearInterval(intervalId);
-                intervalId = null;
+              if (viewportTimer) {
+                clearTimeout(viewportTimer);
+                viewportTimer = null;
               }
-              mobilePlayingRef.current = false;
+              if (autoPlayIntervalRef.current) {
+                clearInterval(autoPlayIntervalRef.current);
+                autoPlayIntervalRef.current = null;
+              }
             }
           });
         },
-        { threshold: 0.2 }
+        { threshold: 0.15 }
       );
 
       if (sectionRef.current) {
@@ -127,11 +194,16 @@ const CinematicStorySection = () => {
       }
 
       return () => {
+        if (viewportTimer) clearTimeout(viewportTimer);
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
+        }
+        window.removeEventListener('scroll', handleScrollTopCheck);
         if (sectionRef.current) observer.unobserve(sectionRef.current);
-        if (intervalId) clearInterval(intervalId);
       };
     }
-  }, [loading]);
+  }, [loading, startAutoPlay, resetToStart]);
 
   // Canvas render loop for 2560x1440 Quad HD frames matching exact background rgb(34, 44, 43)
   useEffect(() => {

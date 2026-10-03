@@ -23,6 +23,8 @@ const HeroCanvas = () => {
   const isAutoPlayingRef = useRef(true);
   const isMobileRef = useRef(false);
 
+  const hasTouchedTopRef = useRef(false);
+
   // Preload Dataset 1 (144 Quad HD upscaled frames)
   useEffect(() => {
     let loadedCount = 0;
@@ -50,54 +52,60 @@ const HeroCanvas = () => {
     }
   }, []);
 
-  // Helper to start/reset automatic hands animation playback
-  const startAutoPlay = useCallback(() => {
+  // Helper to start automatic hands animation playback (direction: 'forward' | 'backward', speedMultiplier)
+  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 2) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
     }
 
     isAutoPlayingRef.current = true;
+    const frameStep = 1.0 * speedMultiplier;
+
+    if (direction === 'forward') {
+      autoPlayIntervalRef.current = setInterval(() => {
+        if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+          autoPlayFrameRef.current += frameStep;
+        } else {
+          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+          if (autoPlayIntervalRef.current) {
+            clearInterval(autoPlayIntervalRef.current);
+            autoPlayIntervalRef.current = null;
+          }
+        }
+      }, 32);
+    } else {
+      // Backward / Reverse playback at 2X speed
+      autoPlayIntervalRef.current = setInterval(() => {
+        if (autoPlayFrameRef.current > 0) {
+          autoPlayFrameRef.current -= frameStep;
+        } else {
+          autoPlayFrameRef.current = 0;
+          if (autoPlayIntervalRef.current) {
+            clearInterval(autoPlayIntervalRef.current);
+            autoPlayIntervalRef.current = null;
+          }
+        }
+      }, 32);
+    }
+  }, []);
+
+  // Reset animation to frame 0
+  const resetToStart = useCallback(() => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current);
+      autoPlayIntervalRef.current = null;
+    }
     autoPlayFrameRef.current = 0;
     currentFrameRef.current = 0;
     targetFrameRef.current = 0;
-
-    autoPlayIntervalRef.current = setInterval(() => {
-      if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
-        autoPlayFrameRef.current += 1.0;
-      } else {
-        autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-        if (autoPlayIntervalRef.current) {
-          clearInterval(autoPlayIntervalRef.current);
-          autoPlayIntervalRef.current = null;
-        }
-      }
-    }, 32);
   }, []);
 
-  // Automatic hands animation playback trigger on load
-  useEffect(() => {
-    if (loading) return;
-
-    const isMobile = window.innerWidth < 768;
-    isMobileRef.current = isMobile;
-
-    startAutoPlay();
-
-    return () => {
-      if (autoPlayIntervalRef.current) {
-        clearInterval(autoPlayIntervalRef.current);
-        autoPlayIntervalRef.current = null;
-      }
-    };
-  }, [loading, startAutoPlay]);
-
-  // Update scroll progress & handle rewind / reset at top
+  // Update scroll progress on PC
   const handleScrollUpdate = useCallback((prog) => {
     setScrollProgress(prog);
 
     if (prog > 0) {
-      // User is scrolling: stop autoplay and let scroll position directly scrub frames
       if (isAutoPlayingRef.current) {
         isAutoPlayingRef.current = false;
         if (autoPlayIntervalRef.current) {
@@ -107,14 +115,14 @@ const HeroCanvas = () => {
       }
       targetFrameRef.current = prog * (TOTAL_FRAMES - 1);
     } else {
-      // User returned to top of page (prog === 0)
       if (!isAutoPlayingRef.current) {
-        startAutoPlay();
+        resetToStart();
+        startAutoPlay('forward', 1);
       }
     }
-  }, [startAutoPlay]);
+  }, [startAutoPlay, resetToStart]);
 
-  // GSAP ScrollTrigger for Hero: Pinned on PC with rewind/reset, scroll-independent on Mobile with top reset
+  // Mobile & PC animation control logic
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
@@ -122,7 +130,10 @@ const HeroCanvas = () => {
     isMobileRef.current = isMobile;
 
     if (!isMobile) {
-      // PC & Laptop: Exact pinned scroll scrubbing with rewind and top reset
+      // PC & Laptop: Exact pinned scroll scrubbing untouched
+      resetToStart();
+      startAutoPlay('forward', 1);
+
       const ctx = gsap.context(() => {
         ScrollTrigger.create({
           trigger: sectionRef.current,
@@ -140,25 +151,82 @@ const HeroCanvas = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: Scroll-independent smooth playback. Resets to start when scrolled back to top.
-      let wasScrolled = false;
+      // Mobile: 2X speed after 0.5s delay in viewport, reverse on scroll back, reset at top on first touch
+      let viewportTimer = null;
+      let lastScrollY = window.scrollY;
 
-      const handleMobileScroll = () => {
-        const scrollY = window.scrollY;
-        if (scrollY <= 5) {
-          if (wasScrolled) {
-            wasScrolled = false;
-            startAutoPlay();
-          }
-        } else {
-          wasScrolled = true;
+      // Handle top-of-page reset & first-touch trigger on Mobile
+      const handleMobileTouch = () => {
+        if (window.scrollY < 50 && !hasTouchedTopRef.current) {
+          hasTouchedTopRef.current = true;
+          resetToStart();
+          viewportTimer = setTimeout(() => {
+            startAutoPlay('forward', 2);
+          }, 500);
         }
       };
 
-      window.addEventListener('scroll', handleMobileScroll, { passive: true });
-      return () => window.removeEventListener('scroll', handleMobileScroll);
+      const handleScrollTopCheck = () => {
+        if (window.scrollY < 50) {
+          hasTouchedTopRef.current = false;
+        }
+      };
+
+      window.addEventListener('touchstart', handleMobileTouch, { passive: true });
+      window.addEventListener('scroll', handleScrollTopCheck, { passive: true });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              const currentY = window.scrollY;
+              const isScrollingUp = currentY < lastScrollY;
+              lastScrollY = currentY;
+
+              if (viewportTimer) clearTimeout(viewportTimer);
+              viewportTimer = setTimeout(() => {
+                if (isScrollingUp) {
+                  startAutoPlay('backward', 2); // 2X speed reverse playback on scroll back
+                } else {
+                  startAutoPlay('forward', 2); // 2X speed forward playback after 0.5s
+                }
+              }, 500);
+            } else {
+              if (viewportTimer) {
+                clearTimeout(viewportTimer);
+                viewportTimer = null;
+              }
+              if (autoPlayIntervalRef.current) {
+                clearInterval(autoPlayIntervalRef.current);
+                autoPlayIntervalRef.current = null;
+              }
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+
+      if (sectionRef.current) {
+        observer.observe(sectionRef.current);
+      }
+
+      // Initial page load trigger on mobile
+      viewportTimer = setTimeout(() => {
+        startAutoPlay('forward', 2);
+      }, 500);
+
+      return () => {
+        if (viewportTimer) clearTimeout(viewportTimer);
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
+        }
+        window.removeEventListener('touchstart', handleMobileTouch);
+        window.removeEventListener('scroll', handleScrollTopCheck);
+        if (sectionRef.current) observer.unobserve(sectionRef.current);
+      };
     }
-  }, [loading, handleScrollUpdate, startAutoPlay]);
+  }, [loading, handleScrollUpdate, startAutoPlay, resetToStart]);
 
   // Canvas render loop for Quad HD frames
   useEffect(() => {
