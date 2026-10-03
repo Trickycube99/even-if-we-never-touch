@@ -11,7 +11,7 @@ const characters = [
     archetype: 'The Canvas Archivist',
     quote: '"If I touch you, the painting is finished. And I am not ready for the museum."',
     desc: 'An obsessive art restorer who sees the world in degraded pigment layers. He spends months restoring a 19th-century canvas, fearful that completing it will erase his reason to remain.',
-    image: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=800&auto=format&fit=crop',
+    image: '/images/cast/kabir.jpg',
   },
   {
     role: 'ANANYA SEN',
@@ -19,7 +19,7 @@ const characters = [
     archetype: 'The Violinist',
     quote: '"The most exquisite music is played in the silence right before the bow hits the string."',
     desc: 'A virtuoso musician facing a degenerative condition. She refuses medical intervention, choosing instead to record single unrepeated notes across empty sea cliffs.',
-    image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
+    image: '/images/cast/ananya.jpg',
   },
   {
     role: 'DEV ANAND',
@@ -27,7 +27,7 @@ const characters = [
     archetype: 'The Keeper of Silence',
     quote: '"Some people love each other by coming together; others by keeping the universe intact."',
     desc: 'The aging lighthouse operator who witnesses Kabir and Ananya’s quiet meetings across the bay. He acts as their silent messenger, carrying letters that are never opened.',
-    image: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+    image: '/images/cast/dev.jpg',
   },
 ];
 
@@ -108,14 +108,14 @@ const CastSection = () => {
               className="interactive group relative flex flex-col bg-[#1B2628]/30 border border-[#1B2628] rounded-xl overflow-hidden hover:border-[#8C2F39]/60 transition-colors duration-500 shadow-2xl"
             >
               {/* Image Container with Sepia-to-Color Hover Effect */}
-              <div className="relative aspect-[3/4] overflow-hidden bg-[#060F10]">
+              <div className="relative aspect-[3/2] overflow-hidden bg-[#060F10]">
                 <img
                   src={char.image}
                   alt={char.role}
-                  className="sepia-card w-full h-full object-cover group-hover:scale-105"
+                  className="sepia-card w-full h-full object-cover object-center group-hover:scale-105"
                   loading="lazy"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#060F10] via-transparent to-transparent opacity-90" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#060F10] via-transparent to-transparent opacity-80" />
 
                 <div className="absolute top-4 left-4 font-mono text-[10px] tracking-widest uppercase px-3 py-1 bg-[#060F10]/80 border border-[#434A48] rounded-full text-[#8B8F89]">
                   {char.archetype}
