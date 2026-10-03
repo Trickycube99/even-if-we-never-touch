@@ -1,5 +1,5 @@
 {
-  "name": "three-d-portfolio-2025",
+  "name": "even-if-we-never-touch-film-portfolio",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -18,6 +18,8 @@
     "@tailwindcss/vite": "^4.0.14",
     "@types/three": "^0.174.0",
     "gsap": "^3.12.7",
+    "lenis": "^1.3.26",
+    "lucide-react": "^1.50.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-responsive": "^10.0.1",
@@ -33,6 +35,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^15.15.0",
+    "playwright": "^1.63.0",
     "vite": "^6.2.0"
   }
 }

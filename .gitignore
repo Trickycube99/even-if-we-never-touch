@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright & test verification files
+.playwright-cli/
+verify_*.png
+verify_site.js
