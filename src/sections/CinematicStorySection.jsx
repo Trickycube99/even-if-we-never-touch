@@ -18,6 +18,10 @@ const CinematicStorySection = () => {
   const targetFrameRef = useRef(0);
   const currentFrameRef = useRef(0);
 
+  const autoPlayFrameRef = useRef(0);
+  const isMobileRef = useRef(false);
+  const mobilePlayingRef = useRef(false);
+
   // Preload Dataset 2 (144 Quad HD upscaled frames)
   useEffect(() => {
     let loadedCount = 0;
@@ -25,10 +29,11 @@ const CinematicStorySection = () => {
 
     for (let i = 1; i <= TOTAL_FRAMES; i++) {
       const img = new Image();
+      img.decoding = 'async';
       const numStr = String(i).padStart(3, '0');
       img.src = `/frames2/ezgif-frame-${numStr}.jpg`;
 
-      img.onload = () => {
+      const handleLoad = () => {
         loadedCount++;
         if (loadedCount === TOTAL_FRAMES) {
           imagesRef.current = images;
@@ -36,57 +41,96 @@ const CinematicStorySection = () => {
         }
       };
 
-      img.onerror = () => {
-        loadedCount++;
-        if (loadedCount === TOTAL_FRAMES) {
-          imagesRef.current = images;
-          setLoading(false);
-        }
-      };
+      img.onload = handleLoad;
+      img.onerror = handleLoad;
 
       images.push(img);
     }
   }, []);
 
-  // GSAP ScrollTrigger pinning (~4800px pin for 144 frames)
+  // GSAP ScrollTrigger on PC, IntersectionObserver / scroll trigger on Mobile
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
-    const ctx = gsap.context(() => {
-      // Expanding letter spacing on section header
-      gsap.fromTo(
-        titleRef.current,
-        { letterSpacing: '0.1em' },
-        {
-          letterSpacing: '0.45em',
-          ease: 'none',
-          scrollTrigger: {
-            trigger: titleRef.current,
-            start: 'top 85%',
-            end: 'bottom 20%',
-            scrub: true,
+    const isMobile = window.innerWidth < 768;
+    isMobileRef.current = isMobile;
+
+    if (!isMobile) {
+      // PC & Laptop: Exact 4800px pinned scroll scrubbing
+      const ctx = gsap.context(() => {
+        gsap.fromTo(
+          titleRef.current,
+          { letterSpacing: '0.1em' },
+          {
+            letterSpacing: '0.45em',
+            ease: 'none',
+            scrollTrigger: {
+              trigger: titleRef.current,
+              start: 'top 85%',
+              end: 'bottom 20%',
+              scrub: true,
+            },
+          }
+        );
+
+        ScrollTrigger.create({
+          trigger: sectionRef.current,
+          start: 'top top',
+          end: '+=4800',
+          pin: true,
+          pinSpacing: true,
+          anticipatePin: 1,
+          scrub: 0.5,
+          onUpdate: (self) => {
+            const prog = self.progress;
+            setScrollProgress(prog);
+            targetFrameRef.current = prog * (TOTAL_FRAMES - 1);
           },
-        }
+        });
+      }, sectionRef);
+
+      return () => ctx.revert();
+    } else {
+      // Mobile: Trigger independent animation playback when scene comes into view
+      let intervalId;
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              setScrollProgress(0.5); // Activate text overlay
+              mobilePlayingRef.current = true;
+
+              if (!intervalId) {
+                intervalId = setInterval(() => {
+                  if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+                    autoPlayFrameRef.current += 0.8;
+                  } else {
+                    autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+                  }
+                }, 32);
+              }
+            } else {
+              if (intervalId) {
+                clearInterval(intervalId);
+                intervalId = null;
+              }
+              mobilePlayingRef.current = false;
+            }
+          });
+        },
+        { threshold: 0.2 }
       );
 
-      // Pinned canvas scroll scrubbing with pinSpacing
-      ScrollTrigger.create({
-        trigger: sectionRef.current,
-        start: 'top top',
-        end: '+=4800',
-        pin: true,
-        pinSpacing: true,
-        anticipatePin: 1,
-        scrub: 0.5,
-        onUpdate: (self) => {
-          const prog = self.progress;
-          setScrollProgress(prog);
-          targetFrameRef.current = prog * (TOTAL_FRAMES - 1);
-        },
-      });
-    }, sectionRef);
+      if (sectionRef.current) {
+        observer.observe(sectionRef.current);
+      }
 
-    return () => ctx.revert();
+      return () => {
+        if (sectionRef.current) observer.unobserve(sectionRef.current);
+        if (intervalId) clearInterval(intervalId);
+      };
+    }
   }, [loading]);
 
   // Canvas render loop for 2560x1440 Quad HD frames matching exact background rgb(34, 44, 43)
@@ -100,6 +144,12 @@ const CinematicStorySection = () => {
     if (!ctx) return;
 
     const render = () => {
+      const isMobile = isMobileRef.current || window.innerWidth < 768;
+
+      if (isMobile) {
+        targetFrameRef.current = autoPlayFrameRef.current;
+      }
+
       const frameDiff = targetFrameRef.current - currentFrameRef.current;
       currentFrameRef.current += frameDiff * 0.15;
 
@@ -107,7 +157,7 @@ const CinematicStorySection = () => {
       const img = imagesRef.current[frameIdx];
 
       if (img && img.complete && img.naturalWidth > 0) {
-        const dpr = Math.max(2, window.devicePixelRatio || 1);
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
         const w = window.innerWidth;
         const h = window.innerHeight;
 
@@ -129,25 +179,17 @@ const CinematicStorySection = () => {
         const imgAspect = imgW / imgH;
         const screenAspect = w / h;
 
-        let renderW, renderH, renderX, renderY;
-        const isMobile = w < 768;
-
-        if (isMobile) {
+        // Universal cover mode for full screen viewport without letterboxing
+        let renderW, renderH;
+        if (screenAspect > imgAspect) {
           renderW = w;
           renderH = w / imgAspect;
-          renderX = 0;
-          renderY = (h - renderH) / 2;
         } else {
-          if (screenAspect > imgAspect) {
-            renderW = w;
-            renderH = w / imgAspect;
-          } else {
-            renderH = h;
-            renderW = h * imgAspect;
-          }
-          renderX = (w - renderW) / 2;
-          renderY = (h - renderH) / 2;
+          renderH = h;
+          renderW = h * imgAspect;
         }
+        const renderX = (w - renderW) / 2;
+        const renderY = (h - renderH) / 2;
 
         ctx.drawImage(img, Math.floor(renderX), Math.floor(renderY), Math.ceil(renderW), Math.ceil(renderH));
         ctx.restore();
@@ -162,31 +204,35 @@ const CinematicStorySection = () => {
   }, [loading]);
 
   let overlayOpacity = 0;
-  if (scrollProgress >= 0.15 && scrollProgress <= 0.82) {
-    overlayOpacity = Math.min(1, (scrollProgress - 0.15) / 0.25);
-  } else if (scrollProgress > 0.82) {
-    overlayOpacity = Math.max(0, 1 - (scrollProgress - 0.82) / 0.1);
+  if (isMobileRef.current) {
+    overlayOpacity = scrollProgress > 0 ? 1 : 0;
+  } else {
+    if (scrollProgress >= 0.15 && scrollProgress <= 0.82) {
+      overlayOpacity = Math.min(1, (scrollProgress - 0.15) / 0.25);
+    } else if (scrollProgress > 0.82) {
+      overlayOpacity = Math.max(0, 1 - (scrollProgress - 0.82) / 0.1);
+    }
   }
 
   return (
     <section
       ref={sectionRef}
       id="story-sequence"
-      className="relative w-full h-screen overflow-hidden bg-[#222D2D] text-[#F0EFEA] border-t border-b border-[#1B2628]"
+      className="relative w-full h-screen min-h-[100dvh] overflow-hidden bg-[#222D2D] text-[#F0EFEA] border-t border-b border-[#1B2628]"
     >
       {/* Loading state indicator */}
       {loading && (
         <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#222D2D] text-[#F0EFEA] px-6">
-          <div className="font-serif text-2xl md:text-4xl font-light tracking-widest mb-4 animate-pulse">
+          <div className="font-serif text-2xl md:text-4xl font-light tracking-widest mb-4 animate-pulse text-center">
             CHAPTER II: THE REUNION
           </div>
-          <div className="font-mono text-xs text-[#8B8F89]">
-            Loading 2.5K Quad HD visual sequence...
+          <div className="font-mono text-[10px] md:text-xs text-[#8B8F89]">
+            Loading visual sequence...
           </div>
         </div>
       )}
 
-      {/* Pinned Scrubbed Canvas for Boy & Girl Sequence */}
+      {/* Scrubbed / Auto-play Canvas */}
       <canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full object-cover z-0"
@@ -197,30 +243,30 @@ const CinematicStorySection = () => {
 
       {/* Chapter Text Overlay */}
       <div
-        className="absolute inset-0 z-20 flex flex-col items-center justify-between py-20 px-6 pointer-events-none transition-opacity duration-500"
+        className="absolute inset-0 z-20 flex flex-col items-center justify-between py-12 sm:py-16 md:py-20 px-4 sm:px-6 pointer-events-none transition-opacity duration-500"
         style={{ opacity: overlayOpacity }}
       >
-        <div className="text-center pt-8">
-          <span className="font-mono text-xs tracking-[0.3em] uppercase text-[#8C2F39] block mb-2">
+        <div className="text-center pt-8 sm:pt-6 drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
+          <span className="font-mono text-[10px] sm:text-xs tracking-[0.25em] sm:tracking-[0.3em] uppercase text-[#8C2F39] block mb-2">
             CHAPTER II &bull; THE DISTANT ORBIT
           </span>
           <h2
             ref={titleRef}
-            className="font-serif text-3xl md:text-5xl font-light text-[#F0EFEA] uppercase tracking-wider"
+            className="font-serif text-2xl sm:text-4xl md:text-5xl font-light text-[#F0EFEA] uppercase tracking-wider"
           >
             KABIR & ANANYA
           </h2>
         </div>
 
-        <div className="text-center max-w-3xl my-auto px-4">
-          <p className="font-serif italic text-xl md:text-3xl font-light text-[#F0EFEA]/90 leading-relaxed">
+        <div className="text-center max-w-3xl my-auto px-2 sm:px-4 drop-shadow-[0_4px_16px_rgba(0,0,0,0.95)]">
+          <p className="font-serif italic text-lg sm:text-2xl md:text-3xl font-light text-[#F0EFEA] leading-relaxed">
             "They stood close enough to feel the warmth of each other's breath, yet far enough so that their shadows never overlapped."
           </p>
-          <div className="w-12 h-[1px] bg-[#8C2F39] mx-auto mt-6" />
+          <div className="w-10 sm:w-12 h-[1px] bg-[#8C2F39] mx-auto mt-4 sm:mt-6" />
         </div>
 
-        <div className="flex flex-col items-center gap-2 pb-4">
-          <span className="font-mono text-[10px] tracking-[0.3em] uppercase text-[#8B8F89]">
+        <div className="flex flex-col items-center gap-2 pb-2 sm:pb-4">
+          <span className="font-mono text-[9px] sm:text-[10px] tracking-[0.3em] uppercase text-[#8B8F89]">
             SCROLL TO CONTINUE
           </span>
           <div className="w-[1px] h-6 bg-[#8C2F39]/60 animate-bounce" />

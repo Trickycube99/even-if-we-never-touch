@@ -16,6 +16,7 @@ const FooterBookend = () => {
 
   const targetFrameRef = useRef(44);
   const currentFrameRef = useRef(44);
+  const isMobileRef = useRef(false);
 
   // Preload frames 1..45 from upscaled Quad HD dataset
   useEffect(() => {
@@ -24,10 +25,11 @@ const FooterBookend = () => {
 
     for (let i = 1; i <= TOTAL_FRAMES; i++) {
       const img = new Image();
+      img.decoding = 'async';
       const numStr = String(i).padStart(3, '0');
       img.src = `/frames/ezgif-frame-${numStr}.jpg`;
 
-      img.onload = () => {
+      const handleLoad = () => {
         loadedCount++;
         if (loadedCount === TOTAL_FRAMES) {
           imagesRef.current = images;
@@ -35,37 +37,39 @@ const FooterBookend = () => {
         }
       };
 
-      img.onerror = () => {
-        loadedCount++;
-        if (loadedCount === TOTAL_FRAMES) {
-          imagesRef.current = images;
-          setLoaded(true);
-        }
-      };
+      img.onload = handleLoad;
+      img.onerror = handleLoad;
 
       images.push(img);
     }
   }, []);
 
-  // GSAP ScrollTrigger for reverse frame scrubbing on footer
+  // GSAP ScrollTrigger for reverse frame scrubbing on footer (desktop)
   useEffect(() => {
     if (!loaded || !footerRef.current) return;
 
-    const ctx = gsap.context(() => {
-      ScrollTrigger.create({
-        trigger: footerRef.current,
-        start: 'top bottom',
-        end: 'bottom bottom',
-        scrub: 0.5,
-        onUpdate: (self) => {
-          const prog = self.progress;
-          const revFrame = (1 - prog) * (TOTAL_FRAMES - 1);
-          targetFrameRef.current = revFrame;
-        },
-      });
-    }, footerRef);
+    const isMobile = window.innerWidth < 768;
+    isMobileRef.current = isMobile;
 
-    return () => ctx.revert();
+    if (!isMobile) {
+      const ctx = gsap.context(() => {
+        ScrollTrigger.create({
+          trigger: footerRef.current,
+          start: 'top bottom',
+          end: 'bottom bottom',
+          scrub: 0.5,
+          onUpdate: (self) => {
+            const prog = self.progress;
+            const revFrame = (1 - prog) * (TOTAL_FRAMES - 1);
+            targetFrameRef.current = revFrame;
+          },
+        });
+      }, footerRef);
+
+      return () => ctx.revert();
+    } else {
+      targetFrameRef.current = 10;
+    }
   }, [loaded]);
 
   // Render loop with high-resolution canvas settings
@@ -86,9 +90,10 @@ const FooterBookend = () => {
       const img = imagesRef.current[frameIdx];
 
       if (img && img.complete && img.naturalWidth > 0) {
-        const dpr = Math.max(2, window.devicePixelRatio || 1);
-        const w = canvas.parentElement.clientWidth;
-        const h = canvas.parentElement.clientHeight;
+        const dpr = Math.min(2, window.devicePixelRatio || 1);
+        const parent = canvas.parentElement;
+        const w = parent ? parent.clientWidth : window.innerWidth;
+        const h = parent ? parent.clientHeight : window.innerHeight;
 
         if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
           canvas.width = Math.floor(w * dpr);
@@ -97,7 +102,6 @@ const FooterBookend = () => {
 
         ctx.save();
         ctx.scale(dpr, dpr);
-
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
@@ -109,7 +113,7 @@ const FooterBookend = () => {
         const imgAspect = imgW / imgH;
         const containerAspect = w / h;
 
-        let renderW, renderH, renderX, renderY;
+        let renderW, renderH;
 
         if (containerAspect > imgAspect) {
           renderW = w;
@@ -119,8 +123,8 @@ const FooterBookend = () => {
           renderW = h * imgAspect;
         }
 
-        renderX = (w - renderW) / 2;
-        renderY = (h - renderH) / 2;
+        const renderX = (w - renderW) / 2;
+        const renderY = (h - renderH) / 2;
 
         ctx.globalAlpha = 0.55;
         ctx.drawImage(img, Math.floor(renderX), Math.floor(renderY), Math.ceil(renderW), Math.ceil(renderH));
@@ -140,7 +144,7 @@ const FooterBookend = () => {
   };
 
   return (
-    <footer ref={footerRef} className="relative w-full h-[80vh] min-h-[500px] bg-[#060F10] text-[#F0EFEA] border-t border-[#1B2628] flex flex-col justify-between overflow-hidden">
+    <footer ref={footerRef} className="relative w-full h-[85vh] min-h-[480px] bg-[#060F10] text-[#F0EFEA] border-t border-[#1B2628] flex flex-col justify-between overflow-hidden">
       {/* Reverse Scrubbing Canvas Background */}
       <canvas
         ref={canvasRef}
@@ -151,37 +155,37 @@ const FooterBookend = () => {
       <div className="absolute inset-0 vignette-dark pointer-events-none z-10" />
 
       {/* Footer Content */}
-      <div className="relative z-20 max-w-7xl mx-auto px-6 md:px-12 py-16 w-full h-full flex flex-col justify-between">
+      <div className="relative z-20 max-w-7xl mx-auto px-6 md:px-12 py-12 md:py-16 w-full h-full flex flex-col justify-between">
         {/* Top Footer Bar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[#1B2628]/60 pb-8">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 border-b border-[#1B2628]/60 pb-6 md:pb-8 text-center md:text-left">
           <div>
-            <h2 className="font-serif text-3xl md:text-4xl font-light tracking-wider text-[#F0EFEA]">
+            <h2 className="font-serif text-2xl sm:text-3xl md:text-4xl font-light tracking-wider text-[#F0EFEA]">
               EVEN IF WE NEVER TOUCH
             </h2>
-            <p className="font-mono text-xs uppercase tracking-widest text-[#8B8F89] mt-1">
+            <p className="font-mono text-[10px] sm:text-xs uppercase tracking-widest text-[#8B8F89] mt-1">
               A FILM BY PRANSHUR MANJKHOLA &bull; 2026
             </p>
           </div>
 
           <button
             onClick={scrollToTop}
-            className="interactive flex items-center gap-3 px-6 py-3 rounded-full border border-[#8B8F89]/40 bg-[#060F10]/80 backdrop-blur-md text-[#F0EFEA] hover:border-[#8C2F39] hover:text-[#8C2F39] transition-all duration-300 group"
+            className="interactive flex items-center gap-3 px-6 py-2.5 sm:py-3 rounded-full border border-[#8B8F89]/40 bg-[#060F10]/80 backdrop-blur-md text-[#F0EFEA] hover:border-[#8C2F39] hover:text-[#8C2F39] transition-all duration-300 group"
           >
-            <span className="font-mono text-xs uppercase tracking-widest">RETURN TO SURFACE</span>
+            <span className="font-mono text-[10px] sm:text-xs uppercase tracking-widest">RETURN TO SURFACE</span>
             <ArrowUp className="w-4 h-4 group-hover:-translate-y-1 transition-transform duration-300" />
           </button>
         </div>
 
         {/* Center Quote / Bookend Notice */}
-        <div className="my-auto text-center max-w-2xl mx-auto py-8">
-          <p className="font-serif italic text-xl md:text-2xl text-[#8B8F89] font-light">
+        <div className="my-auto text-center max-w-2xl mx-auto py-6 md:py-8 px-2">
+          <p className="font-serif italic text-lg sm:text-xl md:text-2xl text-[#8B8F89] font-light leading-relaxed">
             "And so the hands drift apart once more, into the silence from which they came."
           </p>
           <div className="w-8 h-[1px] bg-[#8C2F39] mx-auto mt-4" />
         </div>
 
         {/* Bottom Legal / Copyright Bar */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-[10px] text-[#434A48] tracking-widest uppercase pt-6 border-t border-[#1B2628]/40">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 font-mono text-[9px] sm:text-[10px] text-[#434A48] tracking-widest uppercase pt-4 sm:pt-6 border-t border-[#1B2628]/40 text-center md:text-left">
           <div>
             &copy; 2026 MANJKHOLA PRODUCTIONS. ALL RIGHTS RESERVED.
           </div>

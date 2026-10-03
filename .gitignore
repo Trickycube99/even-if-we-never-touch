@@ -26,4 +26,7 @@ dist-ssr
 # Playwright & test verification files
 .playwright-cli/
 verify_*.png
+mobile_*.png
 verify_site.js
+verify_mobile.js
+
