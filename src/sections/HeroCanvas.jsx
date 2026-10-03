@@ -114,11 +114,12 @@ const HeroCanvas = () => {
     }
   }, [startAutoPlay]);
 
-  // GSAP ScrollTrigger for Hero: Pinned on PC, scroll-independent smooth scroll on Mobile
+  // GSAP ScrollTrigger for Hero: Pinned on PC with rewind/reset, scroll-independent on Mobile with top reset
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
     const isMobile = window.innerWidth < 768;
+    isMobileRef.current = isMobile;
 
     if (!isMobile) {
       // PC & Laptop: Exact pinned scroll scrubbing with rewind and top reset
@@ -139,18 +140,25 @@ const HeroCanvas = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: Natural scroll scrubbing with rewind & top reset
+      // Mobile: Scroll-independent smooth playback. Resets to start when scrolled back to top.
+      let wasScrolled = false;
+
       const handleMobileScroll = () => {
-        const h = window.innerHeight || 800;
         const scrollY = window.scrollY;
-        const prog = Math.min(1, Math.max(0, scrollY / (h * 0.8)));
-        handleScrollUpdate(prog);
+        if (scrollY <= 5) {
+          if (wasScrolled) {
+            wasScrolled = false;
+            startAutoPlay();
+          }
+        } else {
+          wasScrolled = true;
+        }
       };
 
       window.addEventListener('scroll', handleMobileScroll, { passive: true });
       return () => window.removeEventListener('scroll', handleMobileScroll);
     }
-  }, [loading, handleScrollUpdate]);
+  }, [loading, handleScrollUpdate, startAutoPlay]);
 
   // Canvas render loop for Quad HD frames
   useEffect(() => {
@@ -163,12 +171,15 @@ const HeroCanvas = () => {
     if (!ctx) return;
 
     const render = () => {
-      if (isAutoPlayingRef.current) {
+      const isMobile = isMobileRef.current || window.innerWidth < 768;
+
+      if (isMobile || isAutoPlayingRef.current) {
         targetFrameRef.current = autoPlayFrameRef.current;
       }
 
       const frameDiff = targetFrameRef.current - currentFrameRef.current;
-      currentFrameRef.current += frameDiff * 0.2;
+      const lerpFactor = isMobile ? 0.25 : 0.2;
+      currentFrameRef.current += frameDiff * lerpFactor;
 
       let frameIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(currentFrameRef.current)));
       const img = imagesRef.current[frameIdx];
