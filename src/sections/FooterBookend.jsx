@@ -46,7 +46,7 @@ const FooterBookend = () => {
   }, []);
 
   // Helper to start automatic animation playback on Mobile (direction: 'forward' | 'backward')
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 2) => {
+  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -67,7 +67,7 @@ const FooterBookend = () => {
         }
       }, 32);
     } else {
-      // Reverse playback at 2X speed on scroll back
+      // Reverse playback at 4X speed on scroll back
       autoPlayIntervalRef.current = setInterval(() => {
         if (targetFrameRef.current < TOTAL_FRAMES - 1) {
           targetFrameRef.current += frameStep;
@@ -92,7 +92,7 @@ const FooterBookend = () => {
     currentFrameRef.current = 44;
   }, []);
 
-  // GSAP ScrollTrigger for reverse frame scrubbing on footer (desktop), 2X auto-play on Mobile
+  // GSAP ScrollTrigger for reverse frame scrubbing on footer (desktop), 4X auto-play on Mobile
   useEffect(() => {
     if (!loaded || !footerRef.current) return;
 
@@ -116,7 +116,7 @@ const FooterBookend = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: Autoplay footer animation at 2X speed after 0.5s in viewport, reverse on scroll up, reset at top
+      // Mobile: Autoplay footer animation at 4X speed after 0.5s in viewport, reverse on scroll up, reset at top
       let viewportTimer = null;
       let lastScrollY = window.scrollY;
 
@@ -138,9 +138,9 @@ const FooterBookend = () => {
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
                 if (isScrollingUp) {
-                  startAutoPlay('backward', 2);
+                  startAutoPlay('backward', 4);
                 } else {
-                  startAutoPlay('forward', 2);
+                  startAutoPlay('forward', 4);
                 }
               }, 500); // 0.5s viewport delay
             } else {

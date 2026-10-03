@@ -53,7 +53,7 @@ const HeroCanvas = () => {
   }, []);
 
   // Helper to start automatic hands animation playback (direction: 'forward' | 'backward', speedMultiplier)
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 2) => {
+  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -75,7 +75,7 @@ const HeroCanvas = () => {
         }
       }, 32);
     } else {
-      // Backward / Reverse playback at 2X speed
+      // Backward / Reverse playback at 4X speed
       autoPlayIntervalRef.current = setInterval(() => {
         if (autoPlayFrameRef.current > 0) {
           autoPlayFrameRef.current -= frameStep;
@@ -151,7 +151,7 @@ const HeroCanvas = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: 2X speed after 0.5s delay in viewport, reverse on scroll back, reset at top on first touch
+      // Mobile: 4X speed after 0.5s delay in viewport, reverse on scroll back, reset at top on first touch
       let viewportTimer = null;
       let lastScrollY = window.scrollY;
 
@@ -161,7 +161,7 @@ const HeroCanvas = () => {
           hasTouchedTopRef.current = true;
           resetToStart();
           viewportTimer = setTimeout(() => {
-            startAutoPlay('forward', 2);
+            startAutoPlay('forward', 4);
           }, 500);
         }
       };
@@ -186,9 +186,9 @@ const HeroCanvas = () => {
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
                 if (isScrollingUp) {
-                  startAutoPlay('backward', 2); // 2X speed reverse playback on scroll back
+                  startAutoPlay('backward', 4); // 4X speed reverse playback on scroll back
                 } else {
-                  startAutoPlay('forward', 2); // 2X speed forward playback after 0.5s
+                  startAutoPlay('forward', 4); // 4X speed forward playback after 0.5s
                 }
               }, 500);
             } else {
@@ -212,7 +212,7 @@ const HeroCanvas = () => {
 
       // Initial page load trigger on mobile
       viewportTimer = setTimeout(() => {
-        startAutoPlay('forward', 2);
+        startAutoPlay('forward', 4);
       }, 500);
 
       return () => {

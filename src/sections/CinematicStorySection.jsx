@@ -49,7 +49,7 @@ const CinematicStorySection = () => {
   }, []);
 
   // Helper to start automatic animation playback on Mobile (direction: 'forward' | 'backward')
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 2) => {
+  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -74,7 +74,7 @@ const CinematicStorySection = () => {
         }
       }, 32);
     } else {
-      // Reverse playback at 2X speed on scroll back
+      // Reverse playback at 4X speed on scroll back
       if (autoPlayFrameRef.current <= 0) {
         autoPlayFrameRef.current = TOTAL_FRAMES - 1;
       }
@@ -147,7 +147,7 @@ const CinematicStorySection = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: 2X speed animation playback after 0.5s in viewport, reverse on scroll up, reset at top
+      // Mobile: 4X speed animation playback after 0.5s in viewport, reverse on scroll up, reset at top
       let viewportTimer = null;
       let lastScrollY = window.scrollY;
 
@@ -169,9 +169,9 @@ const CinematicStorySection = () => {
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
                 if (isScrollingUp) {
-                  startAutoPlay('backward', 2); // 2X speed reverse playback on scroll up
+                  startAutoPlay('backward', 4); // 4X speed reverse playback on scroll up
                 } else {
-                  startAutoPlay('forward', 2); // 2X speed forward playback after 0.5s
+                  startAutoPlay('forward', 4); // 4X speed forward playback after 0.5s
                 }
               }, 500); // 0.5s viewport delay
             } else {
