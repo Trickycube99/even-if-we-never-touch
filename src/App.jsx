@@ -33,7 +33,7 @@ const App = () => {
     window.scrollTo(0, 0);
 
     if (ScrollTrigger.clearScrollMemory) {
-      ScrollTrigger.clearScrollMemory('hard');
+      ScrollTrigger.clearScrollMemory('manual');
     }
 
     // 2. Initialize Lenis smooth scroll

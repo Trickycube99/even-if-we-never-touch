@@ -147,7 +147,7 @@ const TrailerSection = () => {
             playsInline
           >
             <source
-              src="https://assets.mixkit.co/videos/preview/mixkit-dramatic-waves-crashing-on-dark-rocks-41584-large.mp4"
+              src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4"
               type="video/mp4"
             />
             Your browser does not support the video tag.
