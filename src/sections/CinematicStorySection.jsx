@@ -48,8 +48,8 @@ const CinematicStorySection = () => {
     }
   }, []);
 
-  // Helper to start automatic animation playback on Mobile (direction: 'forward' | 'backward')
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
+  // Helper to start automatic animation playback on Mobile (speedMultiplier = 4)
+  const startAutoPlay = useCallback((speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -58,53 +58,24 @@ const CinematicStorySection = () => {
     setScrollProgress(0.5); // Activate text overlay
     const frameStep = 1.0 * speedMultiplier;
 
-    if (direction === 'forward') {
-      if (autoPlayFrameRef.current >= TOTAL_FRAMES - 1) {
-        autoPlayFrameRef.current = 0;
-      }
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
-          autoPlayFrameRef.current += frameStep;
-        } else {
-          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
-        }
-      }, 32);
-    } else {
-      // Reverse playback at 4X speed on scroll back
-      if (autoPlayFrameRef.current <= 0) {
+    if (autoPlayFrameRef.current >= TOTAL_FRAMES - 1) {
+      autoPlayFrameRef.current = 0;
+    }
+
+    autoPlayIntervalRef.current = setInterval(() => {
+      if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+        autoPlayFrameRef.current += frameStep;
+      } else {
         autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-      }
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (autoPlayFrameRef.current > 0) {
-          autoPlayFrameRef.current -= frameStep;
-        } else {
-          autoPlayFrameRef.current = 0;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
         }
-      }, 32);
-    }
+      }
+    }, 32);
   }, []);
 
-  // Reset to initial frame 0 when top of page is reached
-  const resetToStart = useCallback(() => {
-    if (autoPlayIntervalRef.current) {
-      clearInterval(autoPlayIntervalRef.current);
-      autoPlayIntervalRef.current = null;
-    }
-    autoPlayFrameRef.current = 0;
-    currentFrameRef.current = 0;
-    targetFrameRef.current = 0;
-    setScrollProgress(0);
-  }, []);
-
-  // GSAP ScrollTrigger on PC, IntersectionObserver with direction tracking on Mobile
+  // GSAP ScrollTrigger on PC, IntersectionObserver single-pass playback on Mobile
   useEffect(() => {
     if (loading || !sectionRef.current) return;
 
@@ -147,42 +118,19 @@ const CinematicStorySection = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: 4X speed animation playback after 0.5s in viewport, reverse on scroll up, reset at top
+      // Mobile: 4X speed animation play ONCE after 0.5s delay when scrolled into view, no reverse
       let viewportTimer = null;
-      let lastScrollY = window.scrollY;
-
-      const handleScrollTopCheck = () => {
-        if (window.scrollY < 50) {
-          resetToStart();
-        }
-      };
-      window.addEventListener('scroll', handleScrollTopCheck, { passive: true });
+      let hasPlayed = false;
 
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const currentY = window.scrollY;
-              const isScrollingUp = currentY < lastScrollY;
-              lastScrollY = currentY;
-
+            if (entry.isIntersecting && !hasPlayed) {
+              hasPlayed = true;
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
-                if (isScrollingUp) {
-                  startAutoPlay('backward', 4); // 4X speed reverse playback on scroll up
-                } else {
-                  startAutoPlay('forward', 4); // 4X speed forward playback after 0.5s
-                }
+                startAutoPlay(4); // 4X speed play once
               }, 500); // 0.5s viewport delay
-            } else {
-              if (viewportTimer) {
-                clearTimeout(viewportTimer);
-                viewportTimer = null;
-              }
-              if (autoPlayIntervalRef.current) {
-                clearInterval(autoPlayIntervalRef.current);
-                autoPlayIntervalRef.current = null;
-              }
             }
           });
         },
@@ -199,11 +147,10 @@ const CinematicStorySection = () => {
           clearInterval(autoPlayIntervalRef.current);
           autoPlayIntervalRef.current = null;
         }
-        window.removeEventListener('scroll', handleScrollTopCheck);
         if (sectionRef.current) observer.unobserve(sectionRef.current);
       };
     }
-  }, [loading, startAutoPlay, resetToStart]);
+  }, [loading, startAutoPlay]);
 
   // Canvas render loop for 2560x1440 Quad HD frames matching exact background rgb(34, 44, 43)
   useEffect(() => {

@@ -52,8 +52,8 @@ const HeroCanvas = () => {
     }
   }, []);
 
-  // Helper to start automatic hands animation playback (direction: 'forward' | 'backward', speedMultiplier)
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
+  // Helper to start automatic hands animation playback (speedMultiplier)
+  const startAutoPlay = useCallback((speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -62,32 +62,17 @@ const HeroCanvas = () => {
     isAutoPlayingRef.current = true;
     const frameStep = 1.0 * speedMultiplier;
 
-    if (direction === 'forward') {
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
-          autoPlayFrameRef.current += frameStep;
-        } else {
-          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
+    autoPlayIntervalRef.current = setInterval(() => {
+      if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+        autoPlayFrameRef.current += frameStep;
+      } else {
+        autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
         }
-      }, 32);
-    } else {
-      // Backward / Reverse playback at 4X speed
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (autoPlayFrameRef.current > 0) {
-          autoPlayFrameRef.current -= frameStep;
-        } else {
-          autoPlayFrameRef.current = 0;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
-        }
-      }, 32);
-    }
+      }
+    }, 32);
   }, []);
 
   // Reset animation to frame 0
@@ -117,7 +102,7 @@ const HeroCanvas = () => {
     } else {
       if (!isAutoPlayingRef.current) {
         resetToStart();
-        startAutoPlay('forward', 1);
+        startAutoPlay(1);
       }
     }
   }, [startAutoPlay, resetToStart]);
@@ -132,7 +117,7 @@ const HeroCanvas = () => {
     if (!isMobile) {
       // PC & Laptop: Exact pinned scroll scrubbing untouched
       resetToStart();
-      startAutoPlay('forward', 1);
+      startAutoPlay(1);
 
       const ctx = gsap.context(() => {
         ScrollTrigger.create({
@@ -151,55 +136,17 @@ const HeroCanvas = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: 4X speed after 0.5s delay in viewport, reverse on scroll back, reset at top on first touch
+      // Mobile: 4X speed play ONCE after 0.5s delay on initial load into viewport, no reverse playback
       let viewportTimer = null;
-      let lastScrollY = window.scrollY;
-
-      // Handle top-of-page reset & first-touch trigger on Mobile
-      const handleMobileTouch = () => {
-        if (window.scrollY < 50 && !hasTouchedTopRef.current) {
-          hasTouchedTopRef.current = true;
-          resetToStart();
-          viewportTimer = setTimeout(() => {
-            startAutoPlay('forward', 4);
-          }, 500);
-        }
-      };
-
-      const handleScrollTopCheck = () => {
-        if (window.scrollY < 50) {
-          hasTouchedTopRef.current = false;
-        }
-      };
-
-      window.addEventListener('touchstart', handleMobileTouch, { passive: true });
-      window.addEventListener('scroll', handleScrollTopCheck, { passive: true });
 
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
             if (entry.isIntersecting) {
-              const currentY = window.scrollY;
-              const isScrollingUp = currentY < lastScrollY;
-              lastScrollY = currentY;
-
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
-                if (isScrollingUp) {
-                  startAutoPlay('backward', 4); // 4X speed reverse playback on scroll back
-                } else {
-                  startAutoPlay('forward', 4); // 4X speed forward playback after 0.5s
-                }
+                startAutoPlay(4); // 4X speed play once
               }, 500);
-            } else {
-              if (viewportTimer) {
-                clearTimeout(viewportTimer);
-                viewportTimer = null;
-              }
-              if (autoPlayIntervalRef.current) {
-                clearInterval(autoPlayIntervalRef.current);
-                autoPlayIntervalRef.current = null;
-              }
             }
           });
         },
@@ -210,9 +157,9 @@ const HeroCanvas = () => {
         observer.observe(sectionRef.current);
       }
 
-      // Initial page load trigger on mobile
+      // Initial load trigger
       viewportTimer = setTimeout(() => {
-        startAutoPlay('forward', 4);
+        startAutoPlay(4);
       }, 500);
 
       return () => {
@@ -221,8 +168,6 @@ const HeroCanvas = () => {
           clearInterval(autoPlayIntervalRef.current);
           autoPlayIntervalRef.current = null;
         }
-        window.removeEventListener('touchstart', handleMobileTouch);
-        window.removeEventListener('scroll', handleScrollTopCheck);
         if (sectionRef.current) observer.unobserve(sectionRef.current);
       };
     }

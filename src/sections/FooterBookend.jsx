@@ -45,8 +45,8 @@ const FooterBookend = () => {
     }
   }, []);
 
-  // Helper to start automatic animation playback on Mobile (direction: 'forward' | 'backward')
-  const startAutoPlay = useCallback((direction = 'forward', speedMultiplier = 4) => {
+  // Helper to start automatic animation playback on Mobile (speedMultiplier = 4)
+  const startAutoPlay = useCallback((speedMultiplier = 4) => {
     if (autoPlayIntervalRef.current) {
       clearInterval(autoPlayIntervalRef.current);
       autoPlayIntervalRef.current = null;
@@ -54,45 +54,20 @@ const FooterBookend = () => {
 
     const frameStep = 1.0 * speedMultiplier;
 
-    if (direction === 'forward') {
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (targetFrameRef.current > 0) {
-          targetFrameRef.current -= frameStep;
-        } else {
-          targetFrameRef.current = 0;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
+    autoPlayIntervalRef.current = setInterval(() => {
+      if (targetFrameRef.current > 0) {
+        targetFrameRef.current -= frameStep;
+      } else {
+        targetFrameRef.current = 0;
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
         }
-      }, 32);
-    } else {
-      // Reverse playback at 4X speed on scroll back
-      autoPlayIntervalRef.current = setInterval(() => {
-        if (targetFrameRef.current < TOTAL_FRAMES - 1) {
-          targetFrameRef.current += frameStep;
-        } else {
-          targetFrameRef.current = TOTAL_FRAMES - 1;
-          if (autoPlayIntervalRef.current) {
-            clearInterval(autoPlayIntervalRef.current);
-            autoPlayIntervalRef.current = null;
-          }
-        }
-      }, 32);
-    }
+      }
+    }, 32);
   }, []);
 
-  // Reset to initial frame 44 when top of page is reached
-  const resetToStart = useCallback(() => {
-    if (autoPlayIntervalRef.current) {
-      clearInterval(autoPlayIntervalRef.current);
-      autoPlayIntervalRef.current = null;
-    }
-    targetFrameRef.current = 44;
-    currentFrameRef.current = 44;
-  }, []);
-
-  // GSAP ScrollTrigger for reverse frame scrubbing on footer (desktop), 4X auto-play on Mobile
+  // GSAP ScrollTrigger for reverse frame scrubbing on footer (desktop), 4X single-pass auto-play on Mobile
   useEffect(() => {
     if (!loaded || !footerRef.current) return;
 
@@ -116,42 +91,19 @@ const FooterBookend = () => {
 
       return () => ctx.revert();
     } else {
-      // Mobile: Autoplay footer animation at 4X speed after 0.5s in viewport, reverse on scroll up, reset at top
+      // Mobile: Autoplay footer animation at 4X speed ONCE after 0.5s in viewport, no reverse
       let viewportTimer = null;
-      let lastScrollY = window.scrollY;
-
-      const handleScrollTopCheck = () => {
-        if (window.scrollY < 50) {
-          resetToStart();
-        }
-      };
-      window.addEventListener('scroll', handleScrollTopCheck, { passive: true });
+      let hasPlayed = false;
 
       const observer = new IntersectionObserver(
         (entries) => {
           entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-              const currentY = window.scrollY;
-              const isScrollingUp = currentY < lastScrollY;
-              lastScrollY = currentY;
-
+            if (entry.isIntersecting && !hasPlayed) {
+              hasPlayed = true;
               if (viewportTimer) clearTimeout(viewportTimer);
               viewportTimer = setTimeout(() => {
-                if (isScrollingUp) {
-                  startAutoPlay('backward', 4);
-                } else {
-                  startAutoPlay('forward', 4);
-                }
+                startAutoPlay(4);
               }, 500); // 0.5s viewport delay
-            } else {
-              if (viewportTimer) {
-                clearTimeout(viewportTimer);
-                viewportTimer = null;
-              }
-              if (autoPlayIntervalRef.current) {
-                clearInterval(autoPlayIntervalRef.current);
-                autoPlayIntervalRef.current = null;
-              }
             }
           });
         },
@@ -168,11 +120,10 @@ const FooterBookend = () => {
           clearInterval(autoPlayIntervalRef.current);
           autoPlayIntervalRef.current = null;
         }
-        window.removeEventListener('scroll', handleScrollTopCheck);
         if (footerRef.current) observer.unobserve(footerRef.current);
       };
     }
-  }, [loaded, startAutoPlay, resetToStart]);
+  }, [loaded, startAutoPlay]);
 
   // Render loop with high-resolution canvas settings
   useEffect(() => {
