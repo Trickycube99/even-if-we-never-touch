@@ -19,7 +19,8 @@ const DustParticles = () => {
 
     window.addEventListener('resize', handleResize);
 
-    const particleCount = 45;
+    const isMobile = window.innerWidth < 768;
+    const particleCount = isMobile ? 12 : 45;
     const particles = Array.from({ length: particleCount }, () => ({
       x: Math.random() * width,
       y: Math.random() * height,
@@ -48,8 +49,10 @@ const DustParticles = () => {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
         ctx.fillStyle = `rgba(240, 239, 234, ${Math.max(0.02, currentAlpha)})`;
-        ctx.shadowBlur = 4;
-        ctx.shadowColor = 'rgba(240, 239, 234, 0.3)';
+        if (!isMobile) {
+          ctx.shadowBlur = 4;
+          ctx.shadowColor = 'rgba(240, 239, 234, 0.3)';
+        }
         ctx.fill();
       });
 

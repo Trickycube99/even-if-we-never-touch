@@ -59,6 +59,12 @@
   animation: grainAnimation 0.8s steps(6) infinite;
 }
 
+@media (max-width: 767px) {
+  .film-grain {
+    display: none;
+  }
+}
+
 @keyframes grainAnimation {
   0%, 100% { transform: translate(0, 0); }
   10% { transform: translate(-2%, -3%); }

@@ -152,6 +152,22 @@ const CinematicStorySection = () => {
     }
   }, [loading, startAutoPlay]);
 
+  // Track canvas section visibility to pause RAF loop when off-screen
+  const isCanvasVisibleRef = useRef(false);
+  const lastDrawnFrameRef = useRef(-1);
+
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isCanvasVisibleRef.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Canvas render loop for 2560x1440 Quad HD frames matching exact background rgb(34, 44, 43)
   useEffect(() => {
     if (loading) return;
@@ -163,6 +179,12 @@ const CinematicStorySection = () => {
     if (!ctx) return;
 
     const render = () => {
+      // Pause frame rendering when section is not visible
+      if (!isCanvasVisibleRef.current) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const isMobile = isMobileRef.current || window.innerWidth < 768;
 
       if (isMobile) {
@@ -173,22 +195,35 @@ const CinematicStorySection = () => {
       currentFrameRef.current += frameDiff * 0.15;
 
       const frameIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(currentFrameRef.current)));
+      
+      const dpr = isMobile ? 1.0 : Math.min(2, window.devicePixelRatio || 1);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const targetCanvasW = Math.floor(w * dpr);
+      const targetCanvasH = Math.floor(h * dpr);
+
+      // Skip draw if frame index and resolution are unchanged
+      if (
+        frameIdx === lastDrawnFrameRef.current &&
+        canvas.width === targetCanvasW &&
+        canvas.height === targetCanvasH
+      ) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const img = imagesRef.current[frameIdx];
 
       if (img && img.complete && img.naturalWidth > 0) {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-
-        if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-          canvas.width = Math.floor(w * dpr);
-          canvas.height = Math.floor(h * dpr);
+        if (canvas.width !== targetCanvasW || canvas.height !== targetCanvasH) {
+          canvas.width = targetCanvasW;
+          canvas.height = targetCanvasH;
         }
 
         ctx.save();
         ctx.scale(dpr, dpr);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        ctx.imageSmoothingEnabled = !isMobile;
+        if (!isMobile) ctx.imageSmoothingQuality = 'high';
 
         ctx.fillStyle = '#222D2D';
         ctx.fillRect(0, 0, w, h);
@@ -212,6 +247,8 @@ const CinematicStorySection = () => {
 
         ctx.drawImage(img, Math.floor(renderX), Math.floor(renderY), Math.ceil(renderW), Math.ceil(renderH));
         ctx.restore();
+
+        lastDrawnFrameRef.current = frameIdx;
       }
 
       animId = requestAnimationFrame(render);

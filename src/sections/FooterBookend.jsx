@@ -125,6 +125,22 @@ const FooterBookend = () => {
     }
   }, [loaded, startAutoPlay]);
 
+  // Track canvas visibility to pause RAF loop when off-screen
+  const isCanvasVisibleRef = useRef(false);
+  const lastDrawnFrameRef = useRef(-1);
+
+  useEffect(() => {
+    if (!footerRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isCanvasVisibleRef.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    observer.observe(footerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Render loop with high-resolution canvas settings
   useEffect(() => {
     if (!loaded) return;
@@ -136,27 +152,47 @@ const FooterBookend = () => {
     if (!ctx) return;
 
     const render = () => {
+      // Pause RAF if footer is off-screen
+      if (!isCanvasVisibleRef.current) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
+      const isMobile = isMobileRef.current || window.innerWidth < 768;
       const diff = targetFrameRef.current - currentFrameRef.current;
       currentFrameRef.current += diff * 0.15;
 
       const frameIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(currentFrameRef.current)));
+      
+      const dpr = isMobile ? 1.0 : Math.min(2, window.devicePixelRatio || 1);
+      const parent = canvas.parentElement;
+      const w = parent ? parent.clientWidth : window.innerWidth;
+      const h = parent ? parent.clientHeight : window.innerHeight;
+      const targetCanvasW = Math.floor(w * dpr);
+      const targetCanvasH = Math.floor(h * dpr);
+
+      // Skip draw if frame index and canvas size are unchanged
+      if (
+        frameIdx === lastDrawnFrameRef.current &&
+        canvas.width === targetCanvasW &&
+        canvas.height === targetCanvasH
+      ) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const img = imagesRef.current[frameIdx];
 
       if (img && img.complete && img.naturalWidth > 0) {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const parent = canvas.parentElement;
-        const w = parent ? parent.clientWidth : window.innerWidth;
-        const h = parent ? parent.clientHeight : window.innerHeight;
-
-        if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-          canvas.width = Math.floor(w * dpr);
-          canvas.height = Math.floor(h * dpr);
+        if (canvas.width !== targetCanvasW || canvas.height !== targetCanvasH) {
+          canvas.width = targetCanvasW;
+          canvas.height = targetCanvasH;
         }
 
         ctx.save();
         ctx.scale(dpr, dpr);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        ctx.imageSmoothingEnabled = !isMobile;
+        if (!isMobile) ctx.imageSmoothingQuality = 'high';
 
         ctx.fillStyle = '#060F10';
         ctx.fillRect(0, 0, w, h);
@@ -182,6 +218,8 @@ const FooterBookend = () => {
         ctx.globalAlpha = 0.55;
         ctx.drawImage(img, Math.floor(renderX), Math.floor(renderY), Math.ceil(renderW), Math.ceil(renderH));
         ctx.restore();
+
+        lastDrawnFrameRef.current = frameIdx;
       }
 
       animId = requestAnimationFrame(render);

@@ -173,6 +173,25 @@ const HeroCanvas = () => {
     }
   }, [loading, handleScrollUpdate, startAutoPlay, resetToStart]);
 
+  // Track canvas section visibility to pause RAF loop when off-screen
+  const isCanvasVisibleRef = useRef(true);
+  const lastDrawnFrameRef = useRef(-1);
+  const lastDrawnWidthRef = useRef(0);
+  const lastDrawnHeightRef = useRef(0);
+
+  // IntersectionObserver to observe visibility of Hero canvas
+  useEffect(() => {
+    if (!sectionRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isCanvasVisibleRef.current = entry.isIntersecting;
+      },
+      { threshold: 0 }
+    );
+    observer.observe(sectionRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Canvas render loop for Quad HD frames
   useEffect(() => {
     if (loading) return;
@@ -184,6 +203,12 @@ const HeroCanvas = () => {
     if (!ctx) return;
 
     const render = () => {
+      // If canvas is completely off-screen, skip render processing
+      if (!isCanvasVisibleRef.current) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const isMobile = isMobileRef.current || window.innerWidth < 768;
 
       if (isMobile || isAutoPlayingRef.current) {
@@ -195,22 +220,35 @@ const HeroCanvas = () => {
       currentFrameRef.current += frameDiff * lerpFactor;
 
       let frameIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(currentFrameRef.current)));
+      
+      const dpr = isMobile ? 1.0 : Math.min(2, window.devicePixelRatio || 1);
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const targetCanvasW = Math.floor(w * dpr);
+      const targetCanvasH = Math.floor(h * dpr);
+
+      // Frame deduplication: skip drawing if frame index and canvas size haven't changed
+      if (
+        frameIdx === lastDrawnFrameRef.current &&
+        canvas.width === targetCanvasW &&
+        canvas.height === targetCanvasH
+      ) {
+        animId = requestAnimationFrame(render);
+        return;
+      }
+
       const img = imagesRef.current[frameIdx];
 
       if (img && img.complete && img.naturalWidth > 0) {
-        const dpr = Math.min(2, window.devicePixelRatio || 1);
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-
-        if (canvas.width !== Math.floor(w * dpr) || canvas.height !== Math.floor(h * dpr)) {
-          canvas.width = Math.floor(w * dpr);
-          canvas.height = Math.floor(h * dpr);
+        if (canvas.width !== targetCanvasW || canvas.height !== targetCanvasH) {
+          canvas.width = targetCanvasW;
+          canvas.height = targetCanvasH;
         }
 
         ctx.save();
         ctx.scale(dpr, dpr);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
+        ctx.imageSmoothingEnabled = !isMobile;
+        if (!isMobile) ctx.imageSmoothingQuality = 'high';
 
         ctx.fillStyle = '#060F10';
         ctx.fillRect(0, 0, w, h);
@@ -234,6 +272,10 @@ const HeroCanvas = () => {
 
         ctx.drawImage(img, Math.floor(renderX), Math.floor(renderY), Math.ceil(renderW), Math.ceil(renderH));
         ctx.restore();
+
+        lastDrawnFrameRef.current = frameIdx;
+        lastDrawnWidthRef.current = targetCanvasW;
+        lastDrawnHeightRef.current = targetCanvasH;
       }
 
       animId = requestAnimationFrame(render);
