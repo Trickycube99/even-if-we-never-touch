@@ -5,7 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 import FilmGrain from './components/FilmGrain';
 import DustParticles from './components/DustParticles';
-import Navbar from './components/Navbar';
+import NavBar from './components/NavBar';
 import CreditsModal from './components/CreditsModal';
 
 import HeroCanvas from './sections/HeroCanvas';
@@ -75,7 +75,7 @@ const App = () => {
       <DustParticles />
 
       {/* Main Navigation Header */}
-      <Navbar onOpenCredits={() => setCreditsOpen(true)} />
+      <NavBar onOpenCredits={() => setCreditsOpen(true)} />
 
       <main className="relative z-20 w-full bg-[#060F10]">
         {/* Hero Section: Pinned 180-Frame Hands Canvas Animation (Dataset 1) */}
