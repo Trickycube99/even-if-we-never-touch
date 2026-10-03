@@ -19,6 +19,8 @@ const HeroCanvas = () => {
   const currentFrameRef = useRef(0);
 
   const autoPlayFrameRef = useRef(0);
+  const autoPlayIntervalRef = useRef(null);
+  const isAutoPlayingRef = useRef(true);
   const isMobileRef = useRef(false);
 
   // Preload Dataset 1 (144 Quad HD upscaled frames)
@@ -48,33 +50,69 @@ const HeroCanvas = () => {
     }
   }, []);
 
-  // Automatic hands animation playback loop
+  // Helper to start/reset automatic hands animation playback
+  const startAutoPlay = useCallback(() => {
+    if (autoPlayIntervalRef.current) {
+      clearInterval(autoPlayIntervalRef.current);
+      autoPlayIntervalRef.current = null;
+    }
+
+    isAutoPlayingRef.current = true;
+    autoPlayFrameRef.current = 0;
+    currentFrameRef.current = 0;
+    targetFrameRef.current = 0;
+
+    autoPlayIntervalRef.current = setInterval(() => {
+      if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
+        autoPlayFrameRef.current += 1.0;
+      } else {
+        autoPlayFrameRef.current = TOTAL_FRAMES - 1;
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
+        }
+      }
+    }, 32);
+  }, []);
+
+  // Automatic hands animation playback trigger on load
   useEffect(() => {
     if (loading) return;
 
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
 
-    let intervalId;
-    autoPlayFrameRef.current = 0;
+    startAutoPlay();
 
-    // Play automatically on page load
-    intervalId = setInterval(() => {
-      if (autoPlayFrameRef.current < TOTAL_FRAMES - 1) {
-        autoPlayFrameRef.current += 1.0;
-      } else {
-        if (isMobile) {
-          // On mobile, keep it gently alive or hold at last frame
-          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-        } else {
-          autoPlayFrameRef.current = TOTAL_FRAMES - 1;
-        }
-        clearInterval(intervalId);
+    return () => {
+      if (autoPlayIntervalRef.current) {
+        clearInterval(autoPlayIntervalRef.current);
+        autoPlayIntervalRef.current = null;
       }
-    }, 32);
+    };
+  }, [loading, startAutoPlay]);
 
-    return () => clearInterval(intervalId);
-  }, [loading]);
+  // Update scroll progress & handle rewind / reset at top
+  const handleScrollUpdate = useCallback((prog) => {
+    setScrollProgress(prog);
+
+    if (prog > 0) {
+      // User is scrolling: stop autoplay and let scroll position directly scrub frames
+      if (isAutoPlayingRef.current) {
+        isAutoPlayingRef.current = false;
+        if (autoPlayIntervalRef.current) {
+          clearInterval(autoPlayIntervalRef.current);
+          autoPlayIntervalRef.current = null;
+        }
+      }
+      targetFrameRef.current = prog * (TOTAL_FRAMES - 1);
+    } else {
+      // User returned to top of page (prog === 0)
+      if (!isAutoPlayingRef.current) {
+        startAutoPlay();
+      }
+    }
+  }, [startAutoPlay]);
 
   // GSAP ScrollTrigger for Hero: Pinned on PC, scroll-independent smooth scroll on Mobile
   useEffect(() => {
@@ -83,7 +121,7 @@ const HeroCanvas = () => {
     const isMobile = window.innerWidth < 768;
 
     if (!isMobile) {
-      // PC & Laptop: Exact pinned scroll scrubbing
+      // PC & Laptop: Exact pinned scroll scrubbing with rewind and top reset
       const ctx = gsap.context(() => {
         ScrollTrigger.create({
           trigger: sectionRef.current,
@@ -94,29 +132,25 @@ const HeroCanvas = () => {
           anticipatePin: 1,
           scrub: 0.5,
           onUpdate: (self) => {
-            const prog = self.progress;
-            setScrollProgress(prog);
-
-            const scrollTarget = prog * (TOTAL_FRAMES - 1);
-            targetFrameRef.current = Math.max(autoPlayFrameRef.current, scrollTarget);
+            handleScrollUpdate(self.progress);
           },
         });
       }, sectionRef);
 
       return () => ctx.revert();
     } else {
-      // Mobile: Natural smooth scroll without scroll locking
+      // Mobile: Natural scroll scrubbing with rewind & top reset
       const handleMobileScroll = () => {
         const h = window.innerHeight || 800;
         const scrollY = window.scrollY;
         const prog = Math.min(1, Math.max(0, scrollY / (h * 0.8)));
-        setScrollProgress(prog);
+        handleScrollUpdate(prog);
       };
 
       window.addEventListener('scroll', handleMobileScroll, { passive: true });
       return () => window.removeEventListener('scroll', handleMobileScroll);
     }
-  }, [loading]);
+  }, [loading, handleScrollUpdate]);
 
   // Canvas render loop for Quad HD frames
   useEffect(() => {
@@ -129,17 +163,12 @@ const HeroCanvas = () => {
     if (!ctx) return;
 
     const render = () => {
-      const isMobile = isMobileRef.current || window.innerWidth < 768;
-
-      if (isMobile) {
-        // Mobile: Independent playback follows autoPlayFrameRef
-        targetFrameRef.current = autoPlayFrameRef.current;
-      } else if (scrollProgress === 0) {
+      if (isAutoPlayingRef.current) {
         targetFrameRef.current = autoPlayFrameRef.current;
       }
 
       const frameDiff = targetFrameRef.current - currentFrameRef.current;
-      currentFrameRef.current += frameDiff * 0.18;
+      currentFrameRef.current += frameDiff * 0.2;
 
       let frameIdx = Math.max(0, Math.min(TOTAL_FRAMES - 1, Math.round(currentFrameRef.current)));
       const img = imagesRef.current[frameIdx];
